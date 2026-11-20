@@ -76,7 +76,6 @@
     </div>
     <div id="status"></div>
     
-    <!-- Сканер -->
     <div class="card" id="scannerCard">
       <div class="card-title">📷 Сканер QR-кода</div>
       <div class="scanner-box" id="scannerBox">
@@ -96,7 +95,6 @@
       </div>
     </div>
     
-    <!-- Ручной ввод -->
     <div class="card" id="manualCard">
       <div class="card-title">✏️ Ручной ввод</div>
       <div style="font-size:13px;color:#888;margin-bottom:6px;">Выбор из списка</div>
@@ -163,7 +161,6 @@ function applySettings() {
   document.title = s.appName;
   document.getElementById('appNameTitle').textContent = '📦 ' + s.appName;
   
-  // Жесткое скрытие через style.display
   document.getElementById('scannerCard').style.display = s.scannerEnabled ? 'block' : 'none';
   document.getElementById('manualCard').style.display = s.manualInputEnabled ? 'block' : 'none';
   document.getElementById('btnShip').style.display = s.shipEnabled ? 'block' : 'none';
@@ -232,15 +229,29 @@ async function loadParts(silent = false) {
   }
 }
 
+// ============================================================
+// ФИЛЬТРАЦИЯ ПАРТ-НОМЕРОВ ПО УЧАСТКУ
+// ============================================================
 function updateSelect(parts, keepValue) {
   const select = document.getElementById('partSelect');
   select.innerHTML = '';
-  if (!parts.length) { select.innerHTML = '<option value="">❌ Нет данных</option>'; return; }
+  
+  // Оставляем только те парт-номера, которые есть на текущем участке
+  const filteredParts = parts.filter(p => {
+    if (CURRENT_SECTION === 'Сварка') return p.svar > 0 || p.svar !== undefined; // Если есть поле svar
+    if (CURRENT_SECTION === 'Катафорез') return p.kata > 0 || p.kata !== undefined;
+    return true;
+  });
+
+  if (!filteredParts.length) { 
+    select.innerHTML = '<option value="">❌ Нет деталей для этого участка</option>'; 
+    return; 
+  }
   
   const opt = document.createElement('option'); opt.value = ''; opt.textContent = 'Выберите парт-номер...';
   select.appendChild(opt);
   
-  parts.forEach(p => {
+  filteredParts.forEach(p => {
     const o = document.createElement('option');
     o.value = p.partNumber;
     
@@ -249,14 +260,13 @@ function updateSelect(parts, keepValue) {
     else if (CURRENT_SECTION === 'Катафорез') qty = p.kata || 0;
     else qty = p.total || 0;
     
-    // ВАЖНО: Красивая строка с названием
     const nameStr = p.name ? ` (${p.name})` : '';
     o.textContent = `${p.partNumber}${nameStr} — ${qty} шт.`;
     
     select.appendChild(o);
   });
 
-  if (keepValue && parts.some(p => p.partNumber === keepValue)) select.value = keepValue;
+  if (keepValue && filteredParts.some(p => p.partNumber === keepValue)) select.value = keepValue;
   onPartSelect();
 }
 
@@ -310,7 +320,6 @@ async function manualOperation(action) {
   showStatus('success', res.message);
 }
 
-// СКАНЕР
 async function startCamera() {
   const video = document.getElementById('video');
   const container = document.getElementById('camera-container');
