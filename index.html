@@ -14,7 +14,6 @@
   .header p { color: #888; font-size: 14px; margin-top: 4px; }
   .card { background: #f8f9fc; border-radius: 14px; padding: 16px; margin: 12px 0; }
   .card-title { font-size: 13px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
-  
   .btn { display: block; width: 100%; padding: 15px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin: 6px 0; text-align: center; }
   .btn:active { transform: scale(0.97); }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
@@ -22,20 +21,15 @@
   .btn-blue { background: #007AFF; color: white; }
   .btn-red { background: #FF3B30; color: white; }
   .btn-outline { background: transparent; color: #007AFF; border: 2px solid #007AFF; }
-  
   .input-group { display: flex; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
   .input-group select, .input-group input { flex: 1; min-width: 100px; padding: 12px 14px; border: 2px solid #e5e5ea; border-radius: 10px; font-size: 15px; background: white; }
-  .input-group select:focus, .input-group input:focus { border-color: #007AFF; outline: none; }
-  
   .info-row { display: flex; justify-content: space-between; padding: 10px 14px; background: white; border-radius: 10px; margin: 8px 0; border: 1px solid #e5e5ea; }
   .info-row .label { color: #888; font-size: 14px; }
   .info-row .value { font-weight: 700; font-size: 18px; color: #1a1a2e; }
-  
   #status { padding: 12px 16px; border-radius: 10px; margin: 10px 0; display: none; font-size: 14px; }
   .status-success { background: #d4edda; color: #155724; display: block; }
   .status-error { background: #f8d7da; color: #721c24; display: block; }
   .status-info { background: #d1ecf1; color: #0c5460; display: block; }
-  
   .hidden { display: none !important; }
   .screen { display: none; }
   .screen.active { display: block; }
@@ -107,15 +101,12 @@
       <div style="font-size:13px;color:#888;margin-bottom:6px;">Выбор из списка</div>
       <div class="input-group">
         <select id="partSelect" onchange="onPartSelect()"><option value="">⏳ Загрузка...</option></select>
-        <!-- Поле количества теперь пустое по умолчанию -->
         <input type="number" id="qtyInput" placeholder="Кол-во" min="1" style="max-width:90px;" oninput="validateQty()">
       </div>
       <div class="info-row">
         <span class="label">📊 Доступно:</span>
         <span class="value" id="availableDisplay">-</span>
       </div>
-      
-      <!-- Кнопки изначально заблокированы (disabled) -->
       <button class="btn btn-blue" id="btnShip" onclick="manualOperation('ship')" disabled>📦 Отгрузить</button>
       <button class="btn btn-green" id="btnReceive" style="background:#28a745;margin-top:8px;" onclick="manualOperation('receive')" disabled>📥 Принять</button>
       <button class="btn btn-red" id="btnWriteOff" style="background:#dc3545;margin-top:8px;" onclick="manualOperation('writeOff')" disabled>🗑️ Списать</button>
@@ -129,7 +120,7 @@
 const API_URL = 'https://script.google.com/macros/s/AKfycbzQ2jsXV6fumO4R_tRrh9wevCqswPFhOLJXqF1fQI96uD4LOjTfWYatSF0wkCBCIRpo/exec'; // ВСТАВЬТЕ СЮДА ВАШ URL!
 
 let APP_SETTINGS = null;
-let ALL_PARTS = { svar: [], kata: [] }; 
+let ALL_PARTS = []; // Теперь это единый массив
 let CURRENT_PARTS = [];
 let CURRENT_SECTION = null;
 let CURRENT_SHIFT = null;
@@ -158,7 +149,7 @@ async function bootstrap() {
     document.getElementById('selectStatus').innerHTML = '⏳ Загрузка данных...';
     const data = await jsonp('bootstrap');
     APP_SETTINGS = data.settings;
-    ALL_PARTS = data.parts || { svar: [], kata: [] };
+    ALL_PARTS = data.parts || [];
     applySettings();
     renderSelectScreen();
     document.getElementById('selectStatus').innerHTML = '';
@@ -174,8 +165,6 @@ function applySettings() {
   
   document.getElementById('scannerCard').style.display = s.scannerEnabled ? 'block' : 'none';
   document.getElementById('manualCard').style.display = s.manualInputEnabled ? 'block' : 'none';
-  
-  // Сохраняем настройки видимости в data-атрибуты, чтобы функция validateQty их знала
   document.getElementById('btnShip').style.display = s.shipEnabled ? 'block' : 'none';
   document.getElementById('btnReceive').style.display = s.receiveEnabled ? 'block' : 'none';
   document.getElementById('btnWriteOff').style.display = s.writeOffEnabled ? 'block' : 'none';
@@ -211,7 +200,7 @@ function startWork() {
   document.getElementById('currentShift').textContent = CURRENT_SHIFT;
   document.getElementById('currentSection').textContent = CURRENT_SECTION;
   
-  document.getElementById('qtyInput').value = ''; // Сбрасываем поле при входе
+  document.getElementById('qtyInput').value = ''; 
   validateQty();
   loadParts();
   
@@ -248,9 +237,9 @@ function updateSelect(keepValue) {
   const select = document.getElementById('partSelect');
   select.innerHTML = '';
   
-  if (CURRENT_SECTION === 'Сварка') CURRENT_PARTS = ALL_PARTS.svar || [];
-  else if (CURRENT_SECTION === 'Катафорез') CURRENT_PARTS = ALL_PARTS.kata || [];
-  else CURRENT_PARTS = [];
+  // ФИЛЬТРАЦИЯ: Оставляем только те детали, у которых ЕСТЬ запись для текущего участка
+  // (даже если остаток равен 0)
+  CURRENT_PARTS = ALL_PARTS.filter(p => p.stocks && p.stocks[CURRENT_SECTION] !== undefined);
 
   if (!CURRENT_PARTS.length) { 
     select.innerHTML = '<option value="">❌ Нет деталей для этого участка</option>'; 
@@ -263,8 +252,9 @@ function updateSelect(keepValue) {
   CURRENT_PARTS.forEach(p => {
     const o = document.createElement('option');
     o.value = p.partNumber;
+    const qty = p.stocks[CURRENT_SECTION] || 0; // Берем остаток ТОЛЬКО для текущего участка
     const nameStr = p.name ? ` (${p.name})` : '';
-    o.textContent = `${p.partNumber}${nameStr} — ${p.qty} шт.`;
+    o.textContent = `${p.partNumber}${nameStr} — ${qty} шт.`;
     select.appendChild(o);
   });
 
@@ -278,14 +268,11 @@ function onPartSelect() {
   if (!sel) { display.textContent = '-'; } 
   else {
     const p = CURRENT_PARTS.find(x => x.partNumber === sel);
-    display.textContent = p ? p.qty : '?';
+    display.textContent = p ? (p.stocks[CURRENT_SECTION] || 0) : '?';
   }
-  validateQty(); // Проверяем кнопки при смене детали
+  validateQty();
 }
 
-// ============================================================
-// ВАЛИДАЦИЯ КОЛИЧЕСТВА (Блокировка кнопок)
-// ============================================================
 function validateQty() {
   const qtyInput = document.getElementById('qtyInput');
   const partSelect = document.getElementById('partSelect');
@@ -293,10 +280,8 @@ function validateQty() {
   const qty = parseInt(qtyInput.value);
   const part = partSelect.value;
   
-  // Кнопка активна, если введено число > 0 И выбран парт-номер
   const isValid = (qty > 0 && part !== '');
   
-  // Восстанавливаем видимость кнопок согласно настройкам и добавляем disabled
   const s = APP_SETTINGS;
   document.getElementById('btnShip').disabled = !(isValid && s.shipEnabled);
   document.getElementById('btnReceive').disabled = !(isValid && s.receiveEnabled);
@@ -333,8 +318,8 @@ async function manualOperation(action) {
   showStatus('info', '⏳ Отправка...');
   const res = await sendOperation(action, part, qty);
   
-  document.getElementById('qtyInput').value = ''; // Очищаем поле после операции
-  validateQty(); // Блокируем кнопки обратно
+  document.getElementById('qtyInput').value = ''; 
+  validateQty();
   await loadParts(true);
   showStatus('success', res.message);
 }
@@ -413,13 +398,10 @@ function showStatus(type, msg) {
 
 document.addEventListener('DOMContentLoaded', () => {
   bootstrap();
-  
-  // Слушаем ввод в поле количества, чтобы разблокировать/заблокировать кнопки
   document.getElementById('qtyInput').addEventListener('input', validateQty);
   document.getElementById('qtyInput').addEventListener('keypress', function (e) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      // Ищем первую доступную кнопку и нажимаем её
       if (!document.getElementById('btnShip').disabled) manualOperation('ship');
       else if (!document.getElementById('btnReceive').disabled) manualOperation('receive');
       else if (!document.getElementById('btnWriteOff').disabled) manualOperation('writeOff');
