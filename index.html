@@ -4,9 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Система учёта</title>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <style>
-  /* Стили оставляем без изменений */
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: #e8edf3; padding: 15px; max-width: 480px; margin: 0 auto; min-height: 100vh; }
   .container { background: white; border-radius: 20px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
@@ -31,9 +29,6 @@
   .status-success { background: #d4edda; color: #155724; display: block; }
   .status-error { background: #f8d7da; color: #721c24; display: block; }
   .status-info { background: #d1ecf1; color: #0c5460; display: block; }
-  .divider { text-align: center; color: #ccc; margin: 15px 0; font-size: 13px; }
-  .divider span { background: white; padding: 0 15px; position: relative; z-index: 1; }
-  .divider::after { content: ''; display: block; height: 1px; background: #e5e5ea; margin-top: -10px; }
   .hidden { display: none !important; }
   .screen { display: none; }
   .screen.active { display: block; }
@@ -76,19 +71,19 @@
         <span class="label">📊 Доступно:</span>
         <span class="value" id="availableDisplay">-</span>
       </div>
-      <button class="btn btn-blue" onclick="manualOperation('ship')">📦 Отгрузить</button>
-      <button class="btn btn-green" style="background:#28a745;margin-top:8px;" onclick="manualOperation('receive')">📥 Принять</button>
-      <button class="btn btn-red" style="background:#dc3545;margin-top:8px;" onclick="manualOperation('writeOff')">🗑️ Списать</button>
+      
+      <!-- Кнопки операций. Им добавлены ID для скрытия -->
+      <button class="btn btn-blue" id="btnShip" onclick="manualOperation('ship')">📦 Отгрузить</button>
+      <button class="btn btn-green" id="btnReceive" style="background:#28a745;margin-top:8px;" onclick="manualOperation('receive')">📥 Принять</button>
+      <button class="btn btn-red" id="btnWriteOff" style="background:#dc3545;margin-top:8px;" onclick="manualOperation('writeOff')">🗑️ Списать</button>
     </div>
     
-    <button class="btn btn-outline" onclick="loadParts()" style="margin-top:10px;">🔄 Обновить список вручную</button>
-    <div style="font-size:12px;color:#888;text-align:center;margin-top:10px;">Автообновление каждые 3 минуты</div>
+    <button class="btn btn-outline" onclick="loadParts()" style="margin-top:10px;">🔄 Обновить список</button>
   </div>
 </div>
 
 <script>
-// ВСТАВЬТЕ СЮДА URL ВАШЕГО ВЕБ-ПРИЛОЖЕНИЯ
-const API_URL = 'https://script.google.com/macros/s/AKfycbzQ2jsXV6fumO4R_tRrh9wevCqswPFhOLJXqF1fQI96uD4LOjTfWYatSF0wkCBCIRpo/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzQ2jsXV6fumO4R_tRrh9wevCqswPFhOLJXqF1fQI96uD4LOjTfWYatSF0wkCBCIRpo/exec'; // ВСТАВЬТЕ СЮДА ВАШ URL!
 
 let APP_SETTINGS = null;
 let PARTS = [];
@@ -123,10 +118,21 @@ async function bootstrap() {
   }
 }
 
+// Применение настроек (скрытие/показ элементов)
 function applySettings() {
   const s = APP_SETTINGS;
   document.title = s.appName;
   document.getElementById('appNameTitle').textContent = '📦 ' + s.appName;
+  
+  // Управление кнопками действий
+  document.getElementById('btnShip').style.display = s.shipEnabled ? 'block' : 'none';
+  document.getElementById('btnReceive').style.display = s.receiveEnabled ? 'block' : 'none';
+  document.getElementById('btnWriteOff').style.display = s.writeOffEnabled ? 'block' : 'none';
+  
+  // Управление ручным вводом (скрываем всю карточку)
+  document.getElementById('manualCard').style.display = s.manualInputEnabled ? 'block' : 'none';
+  
+  // Если выключен ручной ввод и сканер, показать нечего - можно добавить сообщение, но пока просто скроем карточку.
 }
 
 function renderSelectScreen() {
@@ -155,15 +161,10 @@ function startWork() {
   document.getElementById('currentShift').textContent = CURRENT_SHIFT;
   document.getElementById('currentSection').textContent = CURRENT_SECTION;
   
-  // Мгновенная загрузка
   loadParts();
   
-  // Автообновление каждые 3 минуты (180000 мс)
   if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-  autoRefreshTimer = setInterval(() => {
-    console.log('Автообновление списка...');
-    loadParts(true); // true означает "тихое" обновление без мигания статуса
-  }, 180000);
+  autoRefreshTimer = setInterval(() => { loadParts(true); }, 180000); // 3 минуты
 }
 
 function changeWork() {
@@ -174,7 +175,7 @@ function changeWork() {
 
 async function loadParts(silent = false) {
   const select = document.getElementById('partSelect');
-  const currentValue = select.value; // Запоминаем выбранный партномер
+  const currentValue = select.value;
   
   if (!silent) {
     select.innerHTML = '<option value="">⏳ Загрузка...</option>';
@@ -201,29 +202,34 @@ function updateSelect(parts, keepValue) {
   parts.forEach(p => {
     const o = document.createElement('option');
     o.value = p.partNumber;
-    o.textContent = p.partNumber + ' (' + getAvailableForSection(p) + ' шт.)';
+    // Если участок Сварка - показываем svar, если Катафорез - kata
+    let qty = 0;
+    if (CURRENT_SECTION === 'Сварка') qty = p.svar || 0;
+    else if (CURRENT_SECTION === 'Катафорез') qty = p.kata || 0;
+    else qty = p.total || 0; // Для других участков показываем общий
+    
+    o.textContent = p.partNumber + ' (' + qty + ' шт.)';
     select.appendChild(o);
   });
 
-  // Восстанавливаем выбор, если он был
-  if (keepValue && parts.some(p => p.partNumber === keepValue)) {
-    select.value = keepValue;
-  }
+  if (keepValue && parts.some(p => p.partNumber === keepValue)) select.value = keepValue;
   onPartSelect();
-}
-
-function getAvailableForSection(p) {
-  if (CURRENT_SECTION === 'Сварка') return p.svar || 0;
-  if (CURRENT_SECTION === 'Катафорез') return p.kata || 0;
-  return 0;
 }
 
 function onPartSelect() {
   const sel = document.getElementById('partSelect').value;
   const display = document.getElementById('availableDisplay');
   if (!sel) { display.textContent = '-'; return; }
+  
   const p = PARTS.find(x => x.partNumber === sel);
-  display.textContent = p ? getAvailableForSection(p) : '?';
+  if (!p) { display.textContent = '?'; return; }
+  
+  let qty = 0;
+  if (CURRENT_SECTION === 'Сварка') qty = p.svar || 0;
+  else if (CURRENT_SECTION === 'Катафорез') qty = p.kata || 0;
+  else qty = p.total || 0;
+  
+  display.textContent = qty;
 }
 
 function sendOperation(action, partNumber, quantity) {
@@ -254,13 +260,9 @@ async function manualOperation(action) {
   
   showStatus('info', '⏳ Отправка...');
   const res = await sendOperation(action, part, qty);
-  showStatus('success', res.message);
   
-  // Принудительно обновляем данные СРАЗУ после операции
   document.getElementById('qtyInput').value = '1';
-  await loadParts(true); 
-  
-  // Восстанавливаем зеленый статус после обновления
+  await loadParts(true); // Обновляем данные сразу после операции
   showStatus('success', res.message);
 }
 
