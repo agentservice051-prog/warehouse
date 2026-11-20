@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Система учёта</title>
+<!-- Библиотека для сканера -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: #e8edf3; padding: 15px; max-width: 480px; margin: 0 auto; min-height: 100vh; }
@@ -17,7 +19,6 @@
   .btn:active { transform: scale(0.97); }
   .btn-green { background: #34C759; color: white; }
   .btn-blue { background: #007AFF; color: white; }
-  .btn-orange { background: #FF9500; color: white; }
   .btn-red { background: #FF3B30; color: white; }
   .btn-outline { background: transparent; color: #007AFF; border: 2px solid #007AFF; }
   .input-group { display: flex; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
@@ -32,10 +33,20 @@
   .hidden { display: none !important; }
   .screen { display: none; }
   .screen.active { display: block; }
-  .choice-btn { padding: 20px; font-size: 20px; font-weight: 700; margin: 10px 0; border: 3px solid #007AFF; background: white; color: #007AFF; border-radius: 14px; cursor: pointer; width: 100%; }
-  .choice-btn.selected { background: #007AFF; color: white; }
   .top-bar { display: flex; justify-content: space-between; align-items: center; background: #1a1a2e; color: white; padding: 10px 14px; border-radius: 12px; margin-bottom: 12px; font-size: 13px; }
   .top-bar button { background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; }
+  
+  /* Стили для сканера */
+  .scanner-box { background: #1a1a2e; border-radius: 14px; padding: 20px; text-align: center; color: white; min-height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .scanner-box .icon { font-size: 48px; margin-bottom: 10px; }
+  #camera-container { position: relative; width: 100%; background: #000; border-radius: 12px; overflow: hidden; display: none; margin-top: 10px; }
+  #camera-container video { width: 100%; display: block; max-height: 300px; object-fit: cover; }
+  #camera-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; text-align: center; pointer-events: none; }
+  #camera-overlay .scan-frame { width: 180px; height: 180px; border: 2px solid rgba(255,255,255,0.5); border-radius: 12px; margin: 0 auto; position: relative; }
+  .scan-line { position: absolute; top: 50%; left: 10%; width: 80%; height: 2px; background: #4CAF50; animation: scanLine 2s ease-in-out infinite; }
+  @keyframes scanLine { 0% { top: 10%; } 50% { top: 90%; } 100% { top: 10%; } }
+  .result-box { margin: 12px 0; padding: 14px; background: #f8f9fc; border-radius: 12px; border-left: 4px solid #34C759; display: none; }
+  .result-box input { width: 100%; padding: 10px; border: 1px solid #e5e5ea; border-radius: 8px; font-size: 14px; background: white; margin: 4px 0; }
 </style>
 </head>
 <body>
@@ -43,11 +54,23 @@
 <!-- ЭКРАН 1: ВЫБОР -->
 <div id="screen-select" class="screen active">
   <div class="container">
-    <div class="header"><h1 id="appNameTitle">📦 Система учёта</h1><p>Выберите смену и участок</p></div>
-    <div class="card"><div class="card-title">👥 Смена</div><div id="shiftChoices"></div></div>
-    <div class="card"><div class="card-title">🏭 Участок</div><div id="sectionChoices"></div></div>
-    <button class="btn btn-green" id="startWorkBtn" onclick="startWork()" disabled>▶ Начать работу</button>
-    <div id="selectStatus" style="margin-top:10px;font-size:13px;"></div>
+    <div class="header">
+      <h1 id="appNameTitle">📦 Система учёта</h1>
+      <p>Выберите смену и участок для начала</p>
+    </div>
+    
+    <div class="card">
+      <div class="card-title" style="margin-bottom:8px;">👥 Смена</div>
+      <select id="shiftSelect" style="width:100%; padding:12px; border:2px solid #e5e5ea; border-radius:10px; font-size:16px; -webkit-appearance:none; appearance:none; background:#fff url('data:image/svg+xml;utf8,<svg fill=\"%23888\" height=\"24\" viewBox=\"0 0 24 24\" width=\"24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M7 10l5 5 5-5z\"/><path d=\"M0 0h24v24H0z\" fill=\"none\"/></svg>') no-repeat right 10px center; background-size: 24px;"></select>
+    </div>
+    
+    <div class="card">
+      <div class="card-title" style="margin-bottom:8px;">🏭 Участок</div>
+      <select id="sectionSelect" style="width:100%; padding:12px; border:2px solid #e5e5ea; border-radius:10px; font-size:16px; -webkit-appearance:none; appearance:none; background:#fff url('data:image/svg+xml;utf8,<svg fill=\"%23888\" height=\"24\" viewBox=\"0 0 24 24\" width=\"24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M7 10l5 5 5-5z\"/><path d=\"M0 0h24v24H0z\" fill=\"none\"/></svg>') no-repeat right 10px center; background-size: 24px;"></select>
+    </div>
+    
+    <button class="btn btn-green" id="startWorkBtn" onclick="startWork()" disabled style="margin-top: 20px;">▶ Начать работу</button>
+    <div id="selectStatus" style="margin-top:10px;font-size:13px; text-align:center;"></div>
   </div>
 </div>
 
@@ -60,6 +83,27 @@
     </div>
     <div id="status"></div>
     
+    <!-- Сканер -->
+    <div class="card" id="scannerCard">
+      <div class="card-title">📷 Сканер QR-кода</div>
+      <div class="scanner-box" id="scannerBox">
+        <span class="icon">📷</span>
+        <p style="font-size:14px; opacity:0.8; margin-bottom:10px;">Наведите камеру на QR-код</p>
+        <button class="btn btn-blue" id="scanBtn" onclick="startCamera()">▶ Запустить сканер</button>
+        <button class="btn btn-red hidden" id="stopBtn" onclick="stopCamera()">⏹ Остановить</button>
+      </div>
+      <div id="camera-container">
+        <video id="video" autoplay playsinline muted></video>
+        <div id="camera-overlay"><div class="scan-frame"><div class="scan-line"></div></div></div>
+      </div>
+      <div class="result-box" id="resultBox">
+        <label style="font-size:12px; color:#888; display:block; margin-bottom:4px;">📋 Данные QR-кода:</label>
+        <input type="text" id="qrResult" readonly>
+        <button class="btn btn-green" onclick="confirmQrShipment()">✅ Подтвердить отгрузку</button>
+      </div>
+    </div>
+    
+    <!-- Ручной ввод -->
     <div class="card" id="manualCard">
       <div class="card-title">✏️ Ручной ввод</div>
       <div style="font-size:13px;color:#888;margin-bottom:6px;">Выбор из списка</div>
@@ -72,7 +116,6 @@
         <span class="value" id="availableDisplay">-</span>
       </div>
       
-      <!-- Кнопки операций. Им добавлены ID для скрытия -->
       <button class="btn btn-blue" id="btnShip" onclick="manualOperation('ship')">📦 Отгрузить</button>
       <button class="btn btn-green" id="btnReceive" style="background:#28a745;margin-top:8px;" onclick="manualOperation('receive')">📥 Принять</button>
       <button class="btn btn-red" id="btnWriteOff" style="background:#dc3545;margin-top:8px;" onclick="manualOperation('writeOff')">🗑️ Списать</button>
@@ -90,6 +133,9 @@ let PARTS = [];
 let CURRENT_SECTION = null;
 let CURRENT_SHIFT = null;
 let autoRefreshTimer = null;
+let videoStream = null;
+let scanInterval = null;
+let scannedData = null;
 
 function jsonp(action) {
   return new Promise((resolve, reject) => {
@@ -108,54 +154,60 @@ function jsonp(action) {
 
 async function bootstrap() {
   try {
+    document.getElementById('selectStatus').innerHTML = '⏳ Загрузка данных...';
     const data = await jsonp('bootstrap');
     APP_SETTINGS = data.settings;
     PARTS = data.parts || [];
     applySettings();
     renderSelectScreen();
+    document.getElementById('selectStatus').innerHTML = '';
   } catch (err) {
     document.getElementById('selectStatus').innerHTML = '<span style="color:red">❌ ' + err.message + '</span>';
   }
 }
 
-// Применение настроек (скрытие/показ элементов)
 function applySettings() {
   const s = APP_SETTINGS;
   document.title = s.appName;
   document.getElementById('appNameTitle').textContent = '📦 ' + s.appName;
   
-  // Управление кнопками действий
+  // Скрываем/показываем сканер
+  document.getElementById('scannerCard').style.display = s.scannerEnabled ? 'block' : 'none';
+  
+  // Скрываем/показываем ручной ввод
+  document.getElementById('manualCard').style.display = s.manualInputEnabled ? 'block' : 'none';
+  
+  // Кнопки операций
   document.getElementById('btnShip').style.display = s.shipEnabled ? 'block' : 'none';
   document.getElementById('btnReceive').style.display = s.receiveEnabled ? 'block' : 'none';
   document.getElementById('btnWriteOff').style.display = s.writeOffEnabled ? 'block' : 'none';
-  
-  // Управление ручным вводом (скрываем всю карточку)
-  document.getElementById('manualCard').style.display = s.manualInputEnabled ? 'block' : 'none';
-  
-  // Если выключен ручной ввод и сканер, показать нечего - можно добавить сообщение, но пока просто скроем карточку.
 }
 
 function renderSelectScreen() {
-  const shiftBox = document.getElementById('shiftChoices');
-  const sectionBox = document.getElementById('sectionChoices');
-  shiftBox.innerHTML = ''; sectionBox.innerHTML = '';
+  const shiftSel = document.getElementById('shiftSelect');
+  const secSel = document.getElementById('sectionSelect');
+  
+  shiftSel.innerHTML = '<option value="">Выберите смену...</option>';
+  secSel.innerHTML = '<option value="">Выберите участок...</option>';
 
   APP_SETTINGS.shifts.forEach(sh => {
-    const b = document.createElement('button'); b.className = 'choice-btn'; b.textContent = 'Смена ' + sh;
-    b.onclick = () => { CURRENT_SHIFT = sh; document.querySelectorAll('#shiftChoices .choice-btn').forEach(x => x.classList.remove('selected')); b.classList.add('selected'); updateStartBtn(); };
-    shiftBox.appendChild(b);
+    const o = document.createElement('option'); o.value = sh; o.textContent = 'Смена ' + sh; shiftSel.appendChild(o);
   });
   APP_SETTINGS.sections.forEach(sec => {
-    const b = document.createElement('button'); b.className = 'choice-btn'; b.textContent = sec;
-    b.onclick = () => { CURRENT_SECTION = sec; document.querySelectorAll('#sectionChoices .choice-btn').forEach(x => x.classList.remove('selected')); b.classList.add('selected'); updateStartBtn(); };
-    sectionBox.appendChild(b);
+    const o = document.createElement('option'); o.value = sec; o.textContent = sec; secSel.appendChild(o);
   });
-  updateStartBtn();
+
+  const check = () => {
+    CURRENT_SHIFT = shiftSel.value;
+    CURRENT_SECTION = secSel.value;
+    document.getElementById('startWorkBtn').disabled = !(CURRENT_SHIFT && CURRENT_SECTION);
+  };
+  shiftSel.onchange = check;
+  secSel.onchange = check;
 }
 
-function updateStartBtn() { document.getElementById('startWorkBtn').disabled = !(CURRENT_SHIFT && CURRENT_SECTION); }
-
 function startWork() {
+  if (!CURRENT_SHIFT || !CURRENT_SECTION) return;
   document.getElementById('screen-select').classList.remove('active');
   document.getElementById('screen-work').classList.add('active');
   document.getElementById('currentShift').textContent = CURRENT_SHIFT;
@@ -171,6 +223,7 @@ function changeWork() {
   document.getElementById('screen-work').classList.remove('active');
   document.getElementById('screen-select').classList.add('active');
   if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  stopCamera();
 }
 
 async function loadParts(silent = false) {
@@ -202,13 +255,16 @@ function updateSelect(parts, keepValue) {
   parts.forEach(p => {
     const o = document.createElement('option');
     o.value = p.partNumber;
-    // Если участок Сварка - показываем svar, если Катафорез - kata
+    
     let qty = 0;
     if (CURRENT_SECTION === 'Сварка') qty = p.svar || 0;
     else if (CURRENT_SECTION === 'Катафорез') qty = p.kata || 0;
-    else qty = p.total || 0; // Для других участков показываем общий
+    else qty = p.total || 0;
     
-    o.textContent = p.partNumber + ' (' + qty + ' шт.)';
+    // Формируем красивую строку: Парт-номер (Наименование) - Кол-во
+    const nameStr = p.name ? ` (${p.name})` : '';
+    o.textContent = `${p.partNumber}${nameStr} — ${qty} шт.`;
+    
     select.appendChild(o);
   });
 
@@ -232,6 +288,9 @@ function onPartSelect() {
   display.textContent = qty;
 }
 
+// ============================================================
+// ОТПРАВКА ДАННЫХ
+// ============================================================
 function sendOperation(action, partNumber, quantity) {
   return new Promise((resolve) => {
     const iframeName = 'ifr_' + Date.now();
@@ -264,6 +323,76 @@ async function manualOperation(action) {
   document.getElementById('qtyInput').value = '1';
   await loadParts(true); // Обновляем данные сразу после операции
   showStatus('success', res.message);
+}
+
+// ============================================================
+// СКАНЕР
+// ============================================================
+async function startCamera() {
+  const video = document.getElementById('video');
+  const container = document.getElementById('camera-container');
+  const scannerBox = document.getElementById('scannerBox');
+  try {
+    videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = videoStream;
+    await video.play();
+    
+    container.style.display = 'block';
+    scannerBox.style.display = 'none';
+    document.getElementById('stopBtn').classList.remove('hidden');
+    document.getElementById('scanBtn').classList.add('hidden');
+    
+    if (scanInterval) clearInterval(scanInterval);
+    scanInterval = setInterval(() => scanQR(video), 500);
+    showStatus('info', '📷 Наведите на QR-код...');
+  } catch (err) {
+    showStatus('error', 'Камера недоступна: ' + err.message);
+  }
+}
+
+function scanQR(video) {
+  if (!video.videoWidth) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(imageData.data, imageData.width, imageData.height);
+  
+  if (code && code.data) {
+    scannedData = code.data;
+    document.getElementById('qrResult').value = code.data;
+    document.getElementById('resultBox').style.display = 'block';
+    stopCamera();
+    showStatus('success', '✅ QR-код распознан!');
+  }
+}
+
+function stopCamera() {
+  if (scanInterval) clearInterval(scanInterval);
+  if (videoStream) videoStream.getTracks().forEach(t => t.stop());
+  document.getElementById('video').srcObject = null;
+  document.getElementById('camera-container').style.display = 'none';
+  document.getElementById('scannerBox').style.display = 'flex';
+  document.getElementById('scanBtn').classList.remove('hidden');
+  document.getElementById('stopBtn').classList.add('hidden');
+}
+
+async function confirmQrShipment() {
+  if (!scannedData) { showStatus('error', '❌ Нет данных'); return; }
+  const parts = scannedData.split('|');
+  if (parts.length < 1) { showStatus('error', 'Неверный формат QR'); return; }
+  const partNumber = parts[0];
+  
+  showStatus('info', '⏳ Отправка...');
+  const res = await sendOperation('ship', partNumber, 1);
+  
+  await loadParts(true);
+  showStatus('success', res.message);
+  
+  scannedData = null;
+  document.getElementById('resultBox').style.display = 'none';
 }
 
 function showStatus(type, msg) {
