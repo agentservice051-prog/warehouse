@@ -116,11 +116,11 @@
 </div>
 
 <script>
-// ⚠️ ВСТАВЬТЕ СЮДА ВАШ URL ИЗ APPS SCRIPT (заканчивается на /exec)
-const API_URL = 'https://script.google.com/macros/s/AKfycbzQ2jsXV6fumO4R_tRrh9wevCqswPFhOLJXqF1fQI96uD4LOjTfWYatSF0wkCBCIRpo/exec'; 
+const API_URL = 'https://script.google.com/macros/s/AKfycbzQ2jsXV6fumO4R_tRrh9wevCqswPFhOLJXqF1fQI96uD4LOjTfWYatSF0wkCBCIRpo/exec'; // ВСТАВЬТЕ СЮДА ВАШ URL!
 
 let APP_SETTINGS = null;
-let PARTS = [];
+let ALL_PARTS = { svar: [], kata: [] }; 
+let CURRENT_PARTS = [];
 let CURRENT_SECTION = null;
 let CURRENT_SHIFT = null;
 let autoRefreshTimer = null;
@@ -148,7 +148,7 @@ async function bootstrap() {
     document.getElementById('selectStatus').innerHTML = '⏳ Загрузка данных...';
     const data = await jsonp('bootstrap');
     APP_SETTINGS = data.settings;
-    PARTS = data.parts || [];
+    ALL_PARTS = data.parts || { svar: [], kata: [] };
     applySettings();
     renderSelectScreen();
     document.getElementById('selectStatus').innerHTML = '';
@@ -222,26 +222,31 @@ async function loadParts(silent = false) {
   }
   
   try {
-    PARTS = await jsonp('getParts');
-    updateSelect(PARTS, currentValue);
+    ALL_PARTS = await jsonp('getParts');
+    updateSelect(currentValue);
     if (!silent) showStatus('success', '✅ Данные обновлены');
   } catch (err) {
     if (!silent) showStatus('error', '❌ Ошибка обновления: ' + err.message);
   }
 }
 
-function updateSelect(parts, keepValue) {
+// ============================================================
+// ОБНОВЛЕНИЕ СПИСКА: Берем массив текущего участка целиком
+// ============================================================
+function updateSelect(keepValue) {
   const select = document.getElementById('partSelect');
   select.innerHTML = '';
   
-  // Фильтруем: если Сварка - только svar, если Катафорез - только kata
-  const filteredParts = parts.filter(p => {
-    if (CURRENT_SECTION === 'Сварка') return p.svar !== undefined; 
-    if (CURRENT_SECTION === 'Катафорез') return p.kata !== undefined;
-    return true;
-  });
+  // Выбираем нужный массив
+  if (CURRENT_SECTION === 'Сварка') {
+    CURRENT_PARTS = ALL_PARTS.svar || [];
+  } else if (CURRENT_SECTION === 'Катафорез') {
+    CURRENT_PARTS = ALL_PARTS.kata || [];
+  } else {
+    CURRENT_PARTS = [];
+  }
 
-  if (!filteredParts.length) { 
+  if (!CURRENT_PARTS.length) { 
     select.innerHTML = '<option value="">❌ Нет деталей для этого участка</option>'; 
     return; 
   }
@@ -249,22 +254,16 @@ function updateSelect(parts, keepValue) {
   const opt = document.createElement('option'); opt.value = ''; opt.textContent = 'Выберите парт-номер...';
   select.appendChild(opt);
   
-  filteredParts.forEach(p => {
+  // Выводим ВСЕ детали из массива (включая с нулевым остатком)
+  CURRENT_PARTS.forEach(p => {
     const o = document.createElement('option');
     o.value = p.partNumber;
-    
-    let qty = 0;
-    if (CURRENT_SECTION === 'Сварка') qty = p.svar || 0;
-    else if (CURRENT_SECTION === 'Катафорез') qty = p.kata || 0;
-    else qty = p.total || 0;
-    
     const nameStr = p.name ? ` (${p.name})` : '';
-    o.textContent = `${p.partNumber}${nameStr} — ${qty} шт.`;
-    
+    o.textContent = `${p.partNumber}${nameStr} — ${p.qty} шт.`;
     select.appendChild(o);
   });
 
-  if (keepValue && filteredParts.some(p => p.partNumber === keepValue)) select.value = keepValue;
+  if (keepValue && CURRENT_PARTS.some(p => p.partNumber === keepValue)) select.value = keepValue;
   onPartSelect();
 }
 
@@ -273,15 +272,8 @@ function onPartSelect() {
   const display = document.getElementById('availableDisplay');
   if (!sel) { display.textContent = '-'; return; }
   
-  const p = PARTS.find(x => x.partNumber === sel);
-  if (!p) { display.textContent = '?'; return; }
-  
-  let qty = 0;
-  if (CURRENT_SECTION === 'Сварка') qty = p.svar || 0;
-  else if (CURRENT_SECTION === 'Катафорез') qty = p.kata || 0;
-  else qty = p.total || 0;
-  
-  display.textContent = qty;
+  const p = CURRENT_PARTS.find(x => x.partNumber === sel);
+  display.textContent = p ? p.qty : '?';
 }
 
 function sendOperation(action, partNumber, quantity) {
