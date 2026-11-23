@@ -14,13 +14,14 @@
   .header p { color: #888; font-size: 14px; margin-top: 4px; }
   .card { background: #f8f9fc; border-radius: 14px; padding: 16px; margin: 12px 0; }
   .card-title { font-size: 13px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
-  .btn { display: block; width: 100%; padding: 15px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin: 6px 0; text-align: center; }
+  .btn { display: block; width: 100%; padding: 15px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin: 6px 0; text-align: center; text-decoration: none; }
   .btn:active { transform: scale(0.97); }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
   .btn-green { background: #34C759; color: white; }
   .btn-blue { background: #007AFF; color: white; }
   .btn-red { background: #FF3B30; color: white; }
   .btn-outline { background: transparent; color: #007AFF; border: 2px solid #007AFF; }
+  .btn-purple { background: #AF52DE; color: white; }
   .input-group { display: flex; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
   .input-group select, .input-group input { flex: 1; min-width: 100px; padding: 12px 14px; border: 2px solid #e5e5ea; border-radius: 10px; font-size: 15px; background: white; }
   .info-row { display: flex; justify-content: space-between; padding: 10px 14px; background: white; border-radius: 10px; margin: 8px 0; border: 1px solid #e5e5ea; }
@@ -112,6 +113,11 @@
       <button class="btn btn-red" id="btnWriteOff" style="background:#dc3545;margin-top:8px;" onclick="manualOperation('writeOff')" disabled>🗑️ Списать</button>
     </div>
     
+    <div class="card">
+      <div class="card-title">📄 Отчетность</div>
+      <button class="btn btn-purple" id="reportBtn" onclick="generateReport()">📊 Сформировать PDF-отчет за смену</button>
+    </div>
+    
     <button class="btn btn-outline" onclick="loadParts()" style="margin-top:10px;">🔄 Обновить список</button>
   </div>
 </div>
@@ -120,7 +126,8 @@
 const API_URL = 'https://script.google.com/macros/s/AKfycbzQ2jsXV6fumO4R_tRrh9wevCqswPFhOLJXqF1fQI96uD4LOjTfWYatSF0wkCBCIRpo/exec'; // ВСТАВЬТЕ СЮДА ВАШ URL!
 
 let APP_SETTINGS = null;
-let ALL_PARTS = []; // Теперь это единый массив
+let ALL_PARTS = [];
+let SECTION_DISPLAY_NAMES = {};
 let CURRENT_PARTS = [];
 let CURRENT_SECTION = null;
 let CURRENT_SHIFT = null;
@@ -150,6 +157,7 @@ async function bootstrap() {
     const data = await jsonp('bootstrap');
     APP_SETTINGS = data.settings;
     ALL_PARTS = data.parts || [];
+    SECTION_DISPLAY_NAMES = data.displayNames || {};
     applySettings();
     renderSelectScreen();
     document.getElementById('selectStatus').innerHTML = '';
@@ -180,8 +188,14 @@ function renderSelectScreen() {
   APP_SETTINGS.shifts.forEach(sh => {
     const o = document.createElement('option'); o.value = sh; o.textContent = 'Смена ' + sh; shiftSel.appendChild(o);
   });
+  
   APP_SETTINGS.sections.forEach(sec => {
-    const o = document.createElement('option'); o.value = sec; o.textContent = sec; secSel.appendChild(o);
+    const o = document.createElement('option'); 
+    o.value = sec; // Значение - техническое (Сварка)
+    // Если есть перевод - выводим его, иначе техническое название
+    const displayName = SECTION_DISPLAY_NAMES[sec] ? SECTION_DISPLAY_NAMES[sec] : sec;
+    o.textContent = displayName; 
+    secSel.appendChild(o);
   });
 
   const check = () => {
@@ -197,8 +211,11 @@ function startWork() {
   if (!CURRENT_SHIFT || !CURRENT_SECTION) return;
   document.getElementById('screen-select').classList.remove('active');
   document.getElementById('screen-work').classList.add('active');
+  
+  // Показываем красивое название в шапке
+  const displayName = SECTION_DISPLAY_NAMES[CURRENT_SECTION] ? SECTION_DISPLAY_NAMES[CURRENT_SECTION] : CURRENT_SECTION;
+  document.getElementById('currentSection').textContent = displayName;
   document.getElementById('currentShift').textContent = CURRENT_SHIFT;
-  document.getElementById('currentSection').textContent = CURRENT_SECTION;
   
   document.getElementById('qtyInput').value = ''; 
   validateQty();
@@ -225,7 +242,9 @@ async function loadParts(silent = false) {
   }
   
   try {
-    ALL_PARTS = await jsonp('getParts');
+    const data = await jsonp('getParts');
+    ALL_PARTS = data.list;
+    SECTION_DISPLAY_NAMES = data.displayNames;
     updateSelect(currentValue);
     if (!silent) showStatus('success', '✅ Данные обновлены');
   } catch (err) {
@@ -237,8 +256,6 @@ function updateSelect(keepValue) {
   const select = document.getElementById('partSelect');
   select.innerHTML = '';
   
-  // ФИЛЬТРАЦИЯ: Оставляем только те детали, у которых ЕСТЬ запись для текущего участка
-  // (даже если остаток равен 0)
   CURRENT_PARTS = ALL_PARTS.filter(p => p.stocks && p.stocks[CURRENT_SECTION] !== undefined);
 
   if (!CURRENT_PARTS.length) { 
@@ -252,7 +269,7 @@ function updateSelect(keepValue) {
   CURRENT_PARTS.forEach(p => {
     const o = document.createElement('option');
     o.value = p.partNumber;
-    const qty = p.stocks[CURRENT_SECTION] || 0; // Берем остаток ТОЛЬКО для текущего участка
+    const qty = p.stocks[CURRENT_SECTION] || 0; 
     const nameStr = p.name ? ` (${p.name})` : '';
     o.textContent = `${p.partNumber}${nameStr} — ${qty} шт.`;
     select.appendChild(o);
@@ -276,13 +293,11 @@ function onPartSelect() {
 function validateQty() {
   const qtyInput = document.getElementById('qtyInput');
   const partSelect = document.getElementById('partSelect');
-  
   const qty = parseInt(qtyInput.value);
   const part = partSelect.value;
-  
   const isValid = (qty > 0 && part !== '');
-  
   const s = APP_SETTINGS;
+  
   document.getElementById('btnShip').disabled = !(isValid && s.shipEnabled);
   document.getElementById('btnReceive').disabled = !(isValid && s.receiveEnabled);
   document.getElementById('btnWriteOff').disabled = !(isValid && s.writeOffEnabled);
@@ -295,6 +310,7 @@ function sendOperation(action, partNumber, quantity) {
     document.body.appendChild(iframe);
     const form = document.createElement('form'); form.method = 'POST'; form.action = API_URL; form.target = iframeName;
     
+    // Отправляем ТЕХНИЧЕСКОЕ имя участка (Сварка)
     const fields = { action, section: CURRENT_SECTION, shift: CURRENT_SHIFT, partNumber, quantity };
     for (const k in fields) {
       const input = document.createElement('input'); input.type = 'hidden'; input.name = k; input.value = fields[k];
@@ -322,6 +338,35 @@ async function manualOperation(action) {
   validateQty();
   await loadParts(true);
   showStatus('success', res.message);
+}
+
+async function generateReport() {
+  const btn = document.getElementById('reportBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Формирование...';
+  showStatus('info', 'Готовим PDF-отчет, это займет пару секунд...');
+
+  try {
+    const formData = new FormData();
+    formData.append('action', 'generateReport');
+    formData.append('section', CURRENT_SECTION);
+    formData.append('shift', CURRENT_SHIFT);
+
+    const res = await fetch(API_URL, { method: 'POST', body: formData });
+    const data = await res.json();
+    
+    if (data.success) {
+      showStatus('success', '✅ ' + data.message);
+      window.open(data.pdfUrl, '_blank');
+    } else {
+      showStatus('error', '❌ ' + data.error);
+    }
+  } catch (err) {
+    showStatus('error', '❌ Ошибка при создании отчета: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📊 Сформировать PDF-отчет за смену';
+  }
 }
 
 async function startCamera() {
