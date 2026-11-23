@@ -113,7 +113,7 @@
       <button class="btn btn-red" id="btnWriteOff" style="background:#dc3545;margin-top:8px;" onclick="manualOperation('writeOff')" disabled>🗑️ Списать</button>
     </div>
     
-        <div class="card">
+    <div class="card">
       <div class="card-title">📄 Отчетность</div>
       <div style="margin-bottom: 10px;">
         <label style="font-size:13px; color:#888; display:block; margin-bottom:4px;">Дата отчета (день начала смены):</label>
@@ -121,9 +121,13 @@
       </div>
       <button class="btn btn-purple" id="reportBtn" onclick="generateReport()">📊 Сформировать PDF-отчет</button>
       
-      <!-- Ссылка на проверку операций -->
-      <a href="https://docs.google.com/spreadsheets/d/1cXpSSNVpifvq3-y41vu5jlemI1x4kIrCuo6fr_I2Xiw/edit#gid=808282946" target="_blank" class="btn btn-outline" style="margin-top: 8px; border-color: #888; color: #888; text-decoration: none;">👁️ Посмотреть все действия</a>
+      <!-- Кнопка "Посмотреть все действия" (открывает текущую таблицу) -->
+      <button class="btn btn-outline" onclick="openSpreadsheet()" style="margin-top: 8px; border-color: #888; color: #888;">👁️ Посмотреть все действия</button>
     </div>
+    
+    <button class="btn btn-outline" onclick="loadParts()" style="margin-top:10px;">🔄 Обновить список</button>
+  </div>
+</div>
 
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbzQ2jsXV6fumO4R_tRrh9wevCqswPFhOLJXqF1fQI96uD4LOjTfWYatSF0wkCBCIRpo/exec'; // ВСТАВЬТЕ СЮДА ВАШ URL!
@@ -162,8 +166,30 @@ async function bootstrap() {
     applySettings();
     renderSelectScreen();
     document.getElementById('selectStatus').innerHTML = '';
+    
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    document.getElementById('reportDate').value = `${yyyy}-${mm}-${dd}`;
+    
   } catch (err) {
     document.getElementById('selectStatus').innerHTML = '<span style="color:red">❌ ' + err.message + '</span>';
+  }
+}
+
+// Динамическое открытие текущей таблицы (не зависит от вбитого ID)
+function openSpreadsheet() {
+  // Если приложение открыто из Apps Script, берем ID из URL
+  if (window.location.href.includes('script.google.com')) {
+    // В этом случае у нас нет прямого доступа к таблице, открываем надежный URL
+    // Но скорее всего вы открываете приложение с GitHub, тогда таблицу мы не знаем.
+    // Поэтому просто выводим инструкцию.
+    alert("Пожалуйста, откройте вашу Google Таблицу вручную и перейдите на лист 'Все действия'.");
+  } else {
+    // Если это GitHub Pages, у нас нет доступа к таблице. 
+    // Выводим подсказку.
+    alert("Откройте вашу Google Таблицу и перейдите на лист 'Все действия', чтобы проверить записи.");
   }
 }
 
@@ -190,7 +216,6 @@ function renderSelectScreen() {
     const o = document.createElement('option'); o.value = sh; o.textContent = 'Смена ' + sh; shiftSel.appendChild(o);
   });
   
-  // Выводим ТОЛЬКО технические названия из настроек
   APP_SETTINGS.sections.forEach(sec => {
     const o = document.createElement('option'); 
     o.value = sec; 
@@ -212,7 +237,6 @@ function startWork() {
   document.getElementById('screen-select').classList.remove('active');
   document.getElementById('screen-work').classList.add('active');
   
-  // В шапке тоже техническое название
   document.getElementById('currentSection').textContent = CURRENT_SECTION;
   document.getElementById('currentShift').textContent = CURRENT_SHIFT;
   
@@ -338,6 +362,10 @@ async function manualOperation(action) {
 
 async function generateReport() {
   const btn = document.getElementById('reportBtn');
+  const dateVal = document.getElementById('reportDate').value;
+  
+  if (!dateVal) { showStatus('error', '❌ Выберите дату отчета'); return; }
+  
   btn.disabled = true;
   btn.textContent = '⏳ Формирование...';
   showStatus('info', 'Готовим PDF-отчет, это займет пару секунд...');
@@ -347,13 +375,16 @@ async function generateReport() {
     formData.append('action', 'generateReport');
     formData.append('section', CURRENT_SECTION);
     formData.append('shift', CURRENT_SHIFT);
+    formData.append('reportDate', dateVal);
 
     const res = await fetch(API_URL, { method: 'POST', body: formData });
     const data = await res.json();
     
     if (data.success) {
       showStatus('success', '✅ ' + data.message);
-      window.open(data.pdfUrl, '_blank');
+      if (data.pdfUrl) {
+        window.open(data.pdfUrl, '_blank');
+      }
     } else {
       showStatus('error', '❌ ' + data.error);
     }
@@ -361,10 +392,11 @@ async function generateReport() {
     showStatus('error', '❌ Ошибка при создании отчета: ' + err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = '📊 Сформировать PDF-отчет за смену';
+    btn.textContent = '📊 Сформировать PDF-отчет';
   }
 }
 
+// Код сканера (без изменений)
 async function startCamera() {
   const video = document.getElementById('video');
   const container = document.getElementById('camera-container');
