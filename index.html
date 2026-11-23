@@ -127,7 +127,6 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbzQ2jsXV6fumO4R_tRrh9we
 
 let APP_SETTINGS = null;
 let ALL_PARTS = [];
-let SECTION_DISPLAY_NAMES = {};
 let CURRENT_PARTS = [];
 let CURRENT_SECTION = null;
 let CURRENT_SHIFT = null;
@@ -157,7 +156,6 @@ async function bootstrap() {
     const data = await jsonp('bootstrap');
     APP_SETTINGS = data.settings;
     ALL_PARTS = data.parts || [];
-    SECTION_DISPLAY_NAMES = data.displayNames || {};
     applySettings();
     renderSelectScreen();
     document.getElementById('selectStatus').innerHTML = '';
@@ -189,12 +187,11 @@ function renderSelectScreen() {
     const o = document.createElement('option'); o.value = sh; o.textContent = 'Смена ' + sh; shiftSel.appendChild(o);
   });
   
+  // Выводим ТОЛЬКО технические названия из настроек
   APP_SETTINGS.sections.forEach(sec => {
     const o = document.createElement('option'); 
-    o.value = sec; // Значение - техническое (Сварка)
-    // Если есть перевод - выводим его, иначе техническое название
-    const displayName = SECTION_DISPLAY_NAMES[sec] ? SECTION_DISPLAY_NAMES[sec] : sec;
-    o.textContent = displayName; 
+    o.value = sec; 
+    o.textContent = sec; 
     secSel.appendChild(o);
   });
 
@@ -212,9 +209,8 @@ function startWork() {
   document.getElementById('screen-select').classList.remove('active');
   document.getElementById('screen-work').classList.add('active');
   
-  // Показываем красивое название в шапке
-  const displayName = SECTION_DISPLAY_NAMES[CURRENT_SECTION] ? SECTION_DISPLAY_NAMES[CURRENT_SECTION] : CURRENT_SECTION;
-  document.getElementById('currentSection').textContent = displayName;
+  // В шапке тоже техническое название
+  document.getElementById('currentSection').textContent = CURRENT_SECTION;
   document.getElementById('currentShift').textContent = CURRENT_SHIFT;
   
   document.getElementById('qtyInput').value = ''; 
@@ -242,9 +238,7 @@ async function loadParts(silent = false) {
   }
   
   try {
-    const data = await jsonp('getParts');
-    ALL_PARTS = data.list;
-    SECTION_DISPLAY_NAMES = data.displayNames;
+    ALL_PARTS = await jsonp('getParts');
     updateSelect(currentValue);
     if (!silent) showStatus('success', '✅ Данные обновлены');
   } catch (err) {
@@ -310,7 +304,6 @@ function sendOperation(action, partNumber, quantity) {
     document.body.appendChild(iframe);
     const form = document.createElement('form'); form.method = 'POST'; form.action = API_URL; form.target = iframeName;
     
-    // Отправляем ТЕХНИЧЕСКОЕ имя участка (Сварка)
     const fields = { action, section: CURRENT_SECTION, shift: CURRENT_SHIFT, partNumber, quantity };
     for (const k in fields) {
       const input = document.createElement('input'); input.type = 'hidden'; input.name = k; input.value = fields[k];
