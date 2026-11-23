@@ -383,7 +383,13 @@ async function generateReport() {
     if (data.success) {
       showStatus('success', '✅ ' + data.message);
       if (data.pdfUrl) {
-        window.open(data.pdfUrl, '_blank');
+        // Создаем невидимую ссылку для скачивания
+        const a = document.createElement('a');
+        a.href = data.pdfUrl;
+        a.download = `Отчет_${CURRENT_SECTION}_${CURRENT_SHIFT}_${dateVal}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       }
     } else {
       showStatus('error', '❌ ' + data.error);
