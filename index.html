@@ -113,14 +113,17 @@
       <button class="btn btn-red" id="btnWriteOff" style="background:#dc3545;margin-top:8px;" onclick="manualOperation('writeOff')" disabled>🗑️ Списать</button>
     </div>
     
-    <div class="card">
+        <div class="card">
       <div class="card-title">📄 Отчетность</div>
-      <button class="btn btn-purple" id="reportBtn" onclick="generateReport()">📊 Сформировать PDF-отчет за смену</button>
+      <div style="margin-bottom: 10px;">
+        <label style="font-size:13px; color:#888; display:block; margin-bottom:4px;">Дата отчета (день начала смены):</label>
+        <input type="date" id="reportDate" style="width:100%; padding:12px; border:2px solid #e5e5ea; border-radius:10px; font-size:15px;">
+      </div>
+      <button class="btn btn-purple" id="reportBtn" onclick="generateReport()">📊 Сформировать PDF-отчет</button>
+      
+      <!-- Ссылка на проверку операций -->
+      <a href="https://docs.google.com/spreadsheets/d/1cXpSSNVpifvq3-y41vu5jlemI1x4kIrCuo6fr_I2Xiw/edit#gid=808282946" target="_blank" class="btn btn-outline" style="margin-top: 8px; border-color: #888; color: #888; text-decoration: none;">👁️ Посмотреть все действия</a>
     </div>
-    
-    <button class="btn btn-outline" onclick="loadParts()" style="margin-top:10px;">🔄 Обновить список</button>
-  </div>
-</div>
 
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbzQ2jsXV6fumO4R_tRrh9wevCqswPFhOLJXqF1fQI96uD4LOjTfWYatSF0wkCBCIRpo/exec'; // ВСТАВЬТЕ СЮДА ВАШ URL!
